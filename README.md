@@ -6,12 +6,12 @@ BeyondMaps is a smart tourism platform designed to help travelers discover perso
 
 ## 👥 Team
 
-Gun Agrawal
-Ridima Singh
-Nitya Bhardwaj
-Arpita Bansal
-Divija Girdhar
-Lolla Apurva Devi
+* Gun Agrawal
+* Ridima Singh
+* Nitya Bhardwaj
+* Arpita Bansal
+* Divija Girdhar
+* Lolla Apurva Devi
 
 ## 🛠️ Tech Stack
 
