@@ -97,4 +97,4 @@ BeyondMaps aims to make tourism more personalized, sustainable, distributed, loc
 **BeyondMaps — Explore beyond the obvious.**
 
 **Frontend:** Gun & Ridima
-**Backend:** Arpita & Divija
+* **Backend:** Arpita & Divija
