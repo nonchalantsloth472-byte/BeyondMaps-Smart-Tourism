@@ -18,12 +18,13 @@ export default function Navbar() {
   const { user, isAuthenticated, signOut } = useAuth();
 
   const navItems = [
-    { label: "Home", href: "/" },
-    { label: "Plan My Trip", href: "/plan-trip" },
-    { label: "Explore", href: "/explore" },
-    { label: "Experiences", href: "/experiences" },
-    { label: "Safety", href: "/safety" },
-  ];
+  { label: "Home", href: "/" },
+  { label: "Plan My Trip", href: "/plan-trip" },
+  { label: "Explore", href: "/explore" },
+  { label: "Experiences", href: "/experiences" },
+  { label: "Insights", href: "/insights" },
+  { label: "Safety", href: "/safety" },
+];
 
   const isActive = (path) => location.pathname === path;
   const firstName = user?.name?.split(" ")[0] || "";
