@@ -1,6 +1,12 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { MapPin, Compass, ArrowRight, Check, ChevronDown } from "lucide-react";
+// @svg-maps packages ship a default export (an object with
+// { viewBox, label, locations }), not a named export — confirmed
+// against react-svg-map's own usage example, which is the reason
+// the previous `import { india } from "@svg-maps/india"` failed
+// with "does not provide an export named 'india'".
+import india from "@svg-maps/india";
 import IndianOrnament from "../components/IndianOrnament";
 import RevealOnScroll from "../components/RevealOnScroll";
 import {
@@ -8,6 +14,18 @@ import {
   ZONE_FILTERS,
   CATEGORY_FILTERS,
 } from "../data/destinations";
+
+/* Real India outline, real state boundaries — from @svg-maps/india
+   rather than a hand-drawn approximation. `india.viewBox` is a
+   "minX minY width height" string; deriving the map's true aspect
+   ratio from it (instead of hardcoding one) means the container
+   below always matches the real outline's proportions, whatever
+   its exact coordinate system turns out to be. */
+const MAP_VIEWBOX_PARTS = india.viewBox.split(/\s+/).map(Number);
+const MAP_ASPECT_RATIO =
+  MAP_VIEWBOX_PARTS.length === 4 && MAP_VIEWBOX_PARTS[2] && MAP_VIEWBOX_PARTS[3]
+    ? MAP_VIEWBOX_PARTS[2] / MAP_VIEWBOX_PARTS[3]
+    : 0.82;
 
 /* =========================================================
    SMALL HELPERS — pure functions & tiny presentational
@@ -152,20 +170,30 @@ const ZONE_LABELS = {
   northeast: "North East India",
 };
 
-/* Marker positions calibrated to the new India outline's viewBox
-   (0–100 x, 0–125 y, expressed here directly as container
-   percentages). This intentionally does not reuse destinations.js's
-   coords — those were tuned for the old abstract blob and no longer
-   line up with a real silhouette. Kept local to this file rather
-   than changing the shared data structure. */
+/* Marker positions as percentages of India's real bounding box —
+   not tied to any particular map package's internal coordinate
+   system, so they stay correct regardless of the exact viewBox
+   @svg-maps/india ships with. Derived from each destination's
+   approximate real latitude/longitude, normalised against a
+   bounding box of roughly 68–97.5°E and 8–36°N (Kutch to Arunachal,
+   Kanyakumari to Ladakh):
+
+     x% = (lon - 68)   / (97.5 - 68) * 100
+     y% = (36 - lat)   / (36 - 8)    * 100   (inverted: higher
+                                               latitude → smaller y)
+
+   This intentionally does not reuse destinations.js's coords —
+   those were tuned for the old abstract blob and no longer line up
+   with a real silhouette. Kept local to this file rather than
+   changing the shared data structure. */
 const MAP_POSITIONS = {
-  Leh: { x: 44, y: 8 },
-  Rajasthan: { x: 26, y: 19 },
-  Varanasi: { x: 54, y: 24 },
-  Shillong: { x: 82, y: 27 },
-  Goa: { x: 30, y: 54 },
-  Hampi: { x: 38, y: 64 },
-  Kerala: { x: 40, y: 78 },
+  Leh: { x: 32.5, y: 6.4 },       // ~34.2°N, 77.6°E
+  Rajasthan: { x: 26.4, y: 32.5 }, // ~26.9°N, 75.8°E (Jaipur area)
+  Varanasi: { x: 50.8, y: 38.2 },  // ~25.3°N, 83.0°E
+  Shillong: { x: 81.0, y: 37.1 },  // ~25.6°N, 91.9°E
+  Goa: { x: 20.7, y: 73.9 },       // ~15.4°N, 73.8°E
+  Hampi: { x: 28.8, y: 73.9 },     // ~15.3°N, 76.5°E
+  Kerala: { x: 28.1, y: 91.1 },    // ~10.5°N, 76.3°E (state centroid)
 };
 
 export default function Explore() {
@@ -471,7 +499,10 @@ export default function Explore() {
                 </div>
               </div>
 
-              <div className="relative border border-[#D8D1C5] bg-[#EEE9DE]/50 aspect-[4/5] overflow-hidden">
+              <div
+                className="relative border border-[#D8D1C5] bg-[#EEE9DE]/50 overflow-hidden"
+                style={{ aspectRatio: MAP_ASPECT_RATIO }}
+              >
 
                 <IndianOrnament
                   variant="floral"
@@ -505,45 +536,28 @@ export default function Explore() {
                 </span>
 
                 <svg
-                  viewBox="0 0 100 125"
+                  viewBox={india.viewBox}
                   className="absolute inset-0 w-full h-full"
-                  preserveAspectRatio="none"
+                  preserveAspectRatio="xMidYMid meet"
                 >
-                  {/* Stylised but geographically believable India outline:
-                      wide north, a narrow "chicken's neck" into the
-                      Assam/Arunachal bulge (NE), a peninsula tapering to
-                      Kanyakumari, and the Gujarat/Kutch bulge in the west. */}
-                  <path
-                    d="M40,4 L52,8 L62,14 L70,16 L74,22 L88,20 L85,32 L80,40
-                       L68,42 L62,52 L58,62 L60,78 L58,95
-                       Q52,108 48,112 Q44,106 42,100
-                       L36,85 L32,70 L28,58 L16,50 L12,42
-                       L20,32 L24,22 L32,10 Z"
-                    fill="#234236"
-                    fillOpacity="0.07"
-                    stroke="#234236"
-                    strokeOpacity="0.3"
-                    strokeLinejoin="round"
-                    strokeWidth="0.7"
-                  />
-
-                  {/* faint decorative travel-route contours */}
-                  <path
-                    d="M34,20 C46,35 50,55 46,75 C43,90 50,100 60,106"
-                    fill="none"
-                    stroke="#C66A4A"
-                    strokeOpacity="0.18"
-                    strokeWidth="0.4"
-                    strokeDasharray="1.4 2"
-                  />
-                  <path
-                    d="M22,60 C34,56 46,62 56,54 C66,48 74,50 80,44"
-                    fill="none"
-                    stroke="#234236"
-                    strokeOpacity="0.15"
-                    strokeWidth="0.4"
-                    strokeDasharray="1.4 2"
-                  />
+                  {/* Real India outline and state boundaries from
+                      @svg-maps/india — not a hand-drawn approximation.
+                      vectorEffect keeps the hairline stroke a consistent
+                      visual width regardless of the package's internal
+                      coordinate scale. */}
+                  {india.locations.map((location) => (
+                    <path
+                      key={location.id}
+                      d={location.path}
+                      fill="#234236"
+                      fillOpacity="0.07"
+                      stroke="#234236"
+                      strokeOpacity="0.3"
+                      strokeLinejoin="round"
+                      strokeWidth="1"
+                      vectorEffect="non-scaling-stroke"
+                    />
+                  ))}
                 </svg>
 
                 {destinations.map((item) => {
@@ -609,7 +623,7 @@ export default function Explore() {
                 })}
 
                 <p className="absolute bottom-3 right-4 text-[9px] uppercase tracking-[0.15em] text-[#6F6A61]">
-                  Stylised map · not to scale
+                  India · state boundaries
                 </p>
 
               </div>
