@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from "react";
   fade-and-slide-up reveal without duplicating the hook in three files.
 */
 
-export default function RevealOnScroll({ children, className = "" }) {
+export default function RevealOnScroll({ children, className = "", style }) {
   const ref = useRef(null);
   const [visible, setVisible] = useState(false);
 
@@ -31,6 +31,7 @@ export default function RevealOnScroll({ children, className = "" }) {
   return (
     <div
       ref={ref}
+      style={style}
       className={`
         transition-all
         duration-1000
