@@ -1,6 +1,15 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { MapPin, Compass, ArrowRight, Check, ChevronDown } from "lucide-react";
+import {
+  MapPin,
+  Compass,
+  ArrowRight,
+  Check,
+  ChevronDown,
+  Activity,
+  AlertTriangle,
+  Radar,
+} from "lucide-react";
 // @svg-maps packages ship a default export (an object with
 // { viewBox, label, locations }), not a named export — confirmed
 // against react-svg-map's own usage example, which is the reason
@@ -9,6 +18,7 @@ import { MapPin, Compass, ArrowRight, Check, ChevronDown } from "lucide-react";
 import india from "@svg-maps/india";
 import IndianOrnament from "../components/IndianOrnament";
 import RevealOnScroll from "../components/RevealOnScroll";
+import CrowdTelemetryChart from "../components/CrowdTelemetryChart";
 import {
   destinations,
   ZONE_FILTERS,
@@ -196,6 +206,56 @@ const MAP_POSITIONS = {
   Kerala: { x: 28.1, y: 91.1 },    // ~10.5°N, 76.3°E (state centroid)
 };
 
+/* =========================================================
+   LIVE TOURIST FLOW — DEMO SIMULATION CONSTANTS
+
+   Frontend-only, illustrative sequences used to make existing crowd
+   data feel live during the hackathon demo. No network calls, no
+   backend — just gradual, scripted movement of numbers that already
+   exist on `destinations`. Kept local to this file since nothing
+   else depends on it.
+
+   Rajasthan already carries "Jaigarh Fort" as its real alternative
+   in destinations.js — the same relationship the brief describes
+   for Amber Fort → Jaigarh Fort — so the surge scenario below plays
+   out on Rajasthan's existing card/marker/alternative rather than
+   inventing a destination that doesn't exist in the data.
+========================================================= */
+
+const SURGE_THRESHOLD = 85;
+
+const SIM_SEQUENCE = {
+  Rajasthan: [31, 55, 74, 88, 94], // heritage circuit surges into HIGH
+  Kerala: [36, 39, 42, 44, 46], // backwaters eases into MODERATE
+  Hampi: [35, 30, 26, 23, 21], // ruins settle into LOW
+};
+
+const SIM_STEPS = Math.max(
+  ...Object.values(SIM_SEQUENCE).map((seq) => seq.length)
+);
+
+const PIPELINE_STAGES = [
+  { id: "live", label: "Live conditions" },
+  { id: "surge", label: "Crowd surge detected" },
+  { id: "analyzing", label: "BeyondMaps analyzes options" },
+  { id: "alternative", label: "Lower-crowd alternative" },
+  { id: "redistributed", label: "Tourist redistributed" },
+];
+
+function PulseMetric({ label, value, unit = "%" }) {
+  return (
+    <div className="flex-1 min-w-[110px] px-5 py-4 border-l first:border-l-0 border-[#D8D1C5]">
+      <p className="text-[9px] uppercase tracking-[0.18em] text-[#6F6A61]">
+        {label}
+      </p>
+      <p className="font-editorial text-2xl text-[#234236] mt-1 tabular-nums">
+        {Math.round(value)}
+        <span className="text-xs text-[#6F6A61] font-sans">{unit}</span>
+      </p>
+    </div>
+  );
+}
+
 export default function Explore() {
   const [query, setQuery] = useState("");
   const [activeZone, setActiveZone] = useState("all");
@@ -204,12 +264,43 @@ export default function Explore() {
   const [hovered, setHovered] = useState(null);
   const [altOpen, setAltOpen] = useState(false);
 
+  // ---- Live Tourist Flow (demo simulation) state ----
+  const [simActive, setSimActive] = useState(false);
+  const [simStep, setSimStep] = useState(0);
+  const [pulse, setPulse] = useState({
+    crowd: 42,
+    traffic: 38,
+    safety: 87,
+    activity: 55,
+  });
+  const [pipelineStage, setPipelineStage] = useState("live");
+  const [surgeAlert, setSurgeAlert] = useState(null);
+  const alertedRef = useRef(new Set());
+  const timersRef = useRef([]);
+
   const mapSectionRef = useRef(null);
+  const liveFlowRef = useRef(null);
+
+  // `destinations` with the current simulation step's crowd values layered
+  // on top. When no simulation has run, this is identical to `destinations`
+  // — every existing consumer of destination data reads from this instead,
+  // so live numbers flow through the map, cards and detail panel without
+  // touching the underlying data file.
+  const liveDestinations = useMemo(() => {
+    if (simStep === 0) return destinations;
+
+    return destinations.map((item) => {
+      const seq = SIM_SEQUENCE[item.name];
+      if (!seq) return item;
+      const crowd = seq[Math.min(simStep, seq.length - 1)];
+      return { ...item, crowd };
+    });
+  }, [simStep]);
 
   const results = useMemo(() => {
     const q = query.trim().toLowerCase();
 
-    return destinations.filter((item) => {
+    return liveDestinations.filter((item) => {
       const matchesZone = activeZone === "all" || item.zone === activeZone;
       const matchesCategory =
         activeCategory === "all" ||
@@ -222,11 +313,11 @@ export default function Explore() {
 
       return matchesZone && matchesCategory && matchesQuery;
     });
-  }, [query, activeZone, activeCategory]);
+  }, [liveDestinations, query, activeZone, activeCategory]);
 
   const selectedDestination =
     results.find((item) => item.name === selected) ||
-    destinations.find((item) => item.name === selected) ||
+    liveDestinations.find((item) => item.name === selected) ||
     results[0];
 
   const regionCount = useMemo(
@@ -244,6 +335,85 @@ export default function Explore() {
   useEffect(() => {
     setAltOpen(false);
   }, [selected]);
+
+  // Advances the simulation one gradual step at a time, and drifts the
+  // City Pulse metrics within realistic bounds, while a simulation run
+  // is active. Frontend-only interval — no requests, no backend.
+  useEffect(() => {
+    if (!simActive) return;
+
+    const interval = setInterval(() => {
+      setSimStep((step) => Math.min(step + 1, SIM_STEPS - 1));
+
+      setPulse((prev) => ({
+        crowd: Math.min(96, Math.max(15, prev.crowd + (Math.random() * 8 - 2))),
+        traffic: Math.min(95, Math.max(10, prev.traffic + (Math.random() * 8 - 3))),
+        safety: Math.min(98, Math.max(70, prev.safety + (Math.random() * 4 - 2))),
+        activity: Math.min(95, Math.max(15, prev.activity + (Math.random() * 8 - 2))),
+      }));
+    }, 2400);
+
+    return () => clearInterval(interval);
+  }, [simActive]);
+
+  // Watches the live crowd values for any destination crossing the surge
+  // threshold, then walks the BeyondMaps pipeline (surge → analyzing →
+  // alternative → redistributed) using the destination's existing
+  // `alternative` / `altCrowd` / `altReason` fields — no new data shape.
+  useEffect(() => {
+    if (!simActive) return;
+
+    liveDestinations.forEach((item) => {
+      if (item.crowd < SURGE_THRESHOLD || alertedRef.current.has(item.name)) return;
+
+      alertedRef.current.add(item.name);
+      setPipelineStage("surge");
+      setSurgeAlert({
+        name: item.name,
+        crowd: item.crowd,
+        alternative: item.alternative,
+        altCrowd: item.altCrowd,
+        altReason: item.altReason,
+      });
+
+      timersRef.current.push(
+        setTimeout(() => setPipelineStage("analyzing"), 900),
+        setTimeout(() => setPipelineStage("alternative"), 2200),
+        setTimeout(() => setPipelineStage("redistributed"), 3600)
+      );
+    });
+  }, [liveDestinations, simActive]);
+
+  const toggleSimulation = () => {
+    setSimActive((active) => {
+      const next = !active;
+
+      if (next) {
+        alertedRef.current.clear();
+        setPipelineStage("live");
+        setSurgeAlert(null);
+      } else {
+        timersRef.current.forEach(clearTimeout);
+        timersRef.current = [];
+        setSimStep(0);
+        setPipelineStage("live");
+        setSurgeAlert(null);
+        alertedRef.current.clear();
+      }
+
+      return next;
+    });
+  };
+
+  const exploreAlternative = (name) => {
+    setSelected(name);
+    mapSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    // The existing `altOpen` reset effect above collapses the alternative
+    // panel whenever `selected` changes — this reopens it a beat later so
+    // "Explore Alternative" lands with the existing panel already expanded,
+    // without altering that effect's original behavior for normal clicks.
+    setTimeout(() => setAltOpen(true), 60);
+  };
 
   const selectAndScroll = (name) => {
     setSelected(name);
@@ -461,6 +631,139 @@ export default function Explore() {
 
 
       {/* =====================================================
+          LIVE TOURIST FLOW — DEMO SIMULATION
+
+          Additive section. It doesn't replace anything above or
+          below — it drives the existing map markers, result cards,
+          detail panel and CrowdTelemetryChart with a scripted,
+          frontend-only "live feed."
+      ===================================================== */}
+
+      <section ref={liveFlowRef} className="relative border-b border-[#D8D1C5] overflow-hidden bg-[#EEE9DE]/40">
+
+        <div className="relative z-10 max-w-7xl mx-auto px-6 lg:px-12 py-12">
+
+          <div className="flex items-center justify-between flex-wrap gap-4 mb-6">
+            <div>
+              <p className="text-[10px] uppercase tracking-[0.25em] text-[#C66A4A] font-semibold flex items-center gap-2">
+                <Radar size={12} />
+                Live Tourist Flow
+              </p>
+              <p className="text-xs text-[#6F6A61] mt-1 max-w-md">
+                Run a simulated feed and watch crowd signals, the map and
+                BeyondMaps' rerouting logic move in real time.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={toggleSimulation}
+              className={`
+                inline-flex items-center gap-2 px-5 py-3 text-xs uppercase tracking-[0.15em] font-semibold
+                transition-colors
+                ${
+                  simActive
+                    ? "bg-[#A84E38] text-[#F5F1E8] hover:bg-[#8f3e2c]"
+                    : "bg-[#234236] text-[#F5F1E8] hover:bg-[#1a3229]"
+                }
+              `}
+            >
+              <Activity size={14} className={simActive ? "animate-pulse" : ""} />
+              {simActive ? "Stop Simulation" : "Simulate Live Conditions"}
+            </button>
+          </div>
+
+          {/* City Pulse */}
+          <div className="flex flex-wrap border border-[#D8D1C5] divide-x divide-[#D8D1C5] bg-white/50 mb-8">
+            <PulseMetric label="Crowd" value={pulse.crowd} />
+            <PulseMetric label="Traffic" value={pulse.traffic} />
+            <PulseMetric label="Safety" value={pulse.safety} unit="/100" />
+            <PulseMetric label="Local Activity" value={pulse.activity} />
+          </div>
+
+          {/* BeyondMaps intelligence pipeline — appears once a run has started */}
+          {(simActive || simStep > 0) && (
+            <div className="flex flex-wrap items-center gap-2 mb-8 text-[10px] uppercase tracking-[0.12em]">
+              {PIPELINE_STAGES.map((stage, i) => {
+                const isActive = stage.id === pipelineStage;
+                const isPast =
+                  PIPELINE_STAGES.findIndex((s) => s.id === pipelineStage) > i;
+
+                return (
+                  <React.Fragment key={stage.id}>
+                    <span
+                      className={`px-3 py-1.5 border transition-colors duration-300 ${
+                        isActive
+                          ? "bg-[#234236] border-[#234236] text-[#F5F1E8]"
+                          : isPast
+                          ? "border-[#234236]/40 text-[#234236]"
+                          : "border-[#D8D1C5] text-[#6F6A61]/60"
+                      }`}
+                    >
+                      {stage.label}
+                    </span>
+                    {i < PIPELINE_STAGES.length - 1 && (
+                      <ArrowRight size={11} className="text-[#6F6A61]/50" />
+                    )}
+                  </React.Fragment>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Crowd surge alert */}
+          {surgeAlert && (
+            <div className="border border-[#A84E38] bg-[#A84E38]/[0.06] p-5 sm:p-6 mb-2 animate-[fadeIn_0.4s_ease-out]">
+              <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.15em] text-[#A84E38]">
+                <AlertTriangle size={14} />
+                Crowd Surge Detected
+              </p>
+              <p className="text-sm text-[#24231F] mt-2">
+                <strong>{surgeAlert.name}</strong> is becoming highly crowded —{" "}
+                {surgeAlert.crowd}% and rising.
+              </p>
+
+              {pipelineStage !== "surge" && (
+                <div className="mt-4 pt-4 border-t border-[#A84E38]/20 grid sm:grid-cols-[1fr_auto] gap-4 items-center">
+                  <div>
+                    <p className="text-[9px] uppercase tracking-[0.16em] text-[#6F6A61]">
+                      BeyondMaps recommends
+                    </p>
+                    <p className="font-editorial text-xl text-[#234236] mt-1">
+                      {surgeAlert.alternative}
+                    </p>
+                    <p className="text-xs text-[#6F6A61] mt-1">
+                      {surgeAlert.altCrowd}% predicted crowd · similar interest · nearby
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => exploreAlternative(surgeAlert.name)}
+                    className="
+                      inline-flex items-center justify-center gap-2 px-5 py-3
+                      bg-[#234236] text-[#F5F1E8] text-xs uppercase tracking-[0.15em] font-semibold
+                      hover:bg-[#1a3229] transition-colors whitespace-nowrap
+                    "
+                  >
+                    Explore Alternative
+                    <ArrowRight size={12} />
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+        </div>
+
+        {/* Existing telemetry chart component — untouched structurally,
+            just handed the live feed via its new optional props. */}
+        <CrowdTelemetryChart live={simActive} liveDensity={pulse.crowd} />
+
+      </section>
+
+
+      {/* =====================================================
           MAP + DETAIL PANEL
       ===================================================== */}
 
@@ -560,7 +863,7 @@ export default function Explore() {
                   ))}
                 </svg>
 
-                {destinations.map((item) => {
+                {liveDestinations.map((item) => {
                   const isVisible = results.some((r) => r.name === item.name);
                   const isSelected = selectedDestination?.name === item.name;
                   const isHovered = hovered === item.name;
