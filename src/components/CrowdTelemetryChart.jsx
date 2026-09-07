@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   AreaChart,
   Area,
@@ -10,17 +10,57 @@ import {
 } from 'recharts';
 import { BarChart3, Clock, Info } from 'lucide-react';
 
-export default function CrowdTelemetryChart() {
-  const chartData = [
-    { time: '06:00 AM', standard: 12, beyond: 18, label: 'Dawn Solitude' },
-    { time: '08:00 AM', standard: 38, beyond: 25, label: 'Stepwell Opening' },
-    { time: '10:00 AM', standard: 78, beyond: 30, label: 'Tour Bus Influx' },
-    { time: '12:00 PM', standard: 96, beyond: 24, label: 'Peak Midday Heat' },
-    { time: '02:00 PM', standard: 88, beyond: 28, label: 'Afternoon Rush' },
-    { time: '04:00 PM', standard: 82, beyond: 32, label: 'Palace Queue' },
-    { time: '06:00 PM', standard: 48, beyond: 22, label: 'Sunset Vista' },
-    { time: '08:00 PM', standard: 20, beyond: 14, label: 'Bazaar Lanterns' },
-  ];
+/*
+  `live` / `liveDensity` are optional, additive props used by the Explore
+  page's "Live Tourist Flow" simulation. Left unset (the default), this
+  component renders exactly as before — same data, same static chart.
+  When `live` is true, the most recent point on the BeyondMaps line gently
+  jitters around `liveDensity` on an interval, so the chart visibly
+  "breathes" while a simulation is running, without altering the original
+  historical dataset it's built from.
+*/
+export default function CrowdTelemetryChart({ live = false, liveDensity = null }) {
+  const baseData = useMemo(
+    () => [
+      { time: '06:00 AM', standard: 12, beyond: 18, label: 'Dawn Solitude' },
+      { time: '08:00 AM', standard: 38, beyond: 25, label: 'Stepwell Opening' },
+      { time: '10:00 AM', standard: 78, beyond: 30, label: 'Tour Bus Influx' },
+      { time: '12:00 PM', standard: 96, beyond: 24, label: 'Peak Midday Heat' },
+      { time: '02:00 PM', standard: 88, beyond: 28, label: 'Afternoon Rush' },
+      { time: '04:00 PM', standard: 82, beyond: 32, label: 'Palace Queue' },
+      { time: '06:00 PM', standard: 48, beyond: 22, label: 'Sunset Vista' },
+      { time: '08:00 PM', standard: 20, beyond: 14, label: 'Bazaar Lanterns' },
+    ],
+    []
+  );
+
+  const [chartData, setChartData] = useState(baseData);
+
+  useEffect(() => {
+    if (!live) {
+      setChartData(baseData);
+      return;
+    }
+
+    const interval = setInterval(() => {
+      setChartData((prev) => {
+        const next = [...prev];
+        const lastIdx = next.length - 1;
+        const anchor = liveDensity ?? next[lastIdx].beyond;
+        const jitter = Math.round(Math.random() * 6 - 3);
+
+        next[lastIdx] = {
+          ...next[lastIdx],
+          beyond: Math.min(45, Math.max(10, Math.round(anchor) + jitter)),
+          label: 'Live Reading',
+        };
+
+        return next;
+      });
+    }, 2000);
+
+    return () => clearInterval(interval);
+  }, [live, liveDensity, baseData]);
 
   const CustomTooltip = ({ active, payload, label }) => {
     if (active && payload && payload.length) {
@@ -68,8 +108,14 @@ export default function CrowdTelemetryChart() {
           
           <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-6 mb-6 border-b border-[#D8D1C5] gap-4">
             <div>
-              <span className="text-xs uppercase font-bold tracking-wider text-[#234236] block">
+              <span className="text-xs uppercase font-bold tracking-wider text-[#234236] flex items-center gap-2">
                 Jaipur Heritage Corridor · Average Hourly Congestion Rate (%)
+                {live && (
+                  <span className="inline-flex items-center gap-1.5 px-2 py-0.5 bg-[#234236] text-[#F5F1E8] text-[9px] tracking-[0.15em] normal-case font-semibold">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#F5F1E8] animate-pulse" />
+                    Live
+                  </span>
+                )}
               </span>
               <span className="text-xs text-[#6F6A61]">
                 Aggregated from 18,000+ localized footfall checkpoints and historic monument ticket queues
