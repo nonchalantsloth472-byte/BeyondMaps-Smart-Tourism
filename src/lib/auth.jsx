@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState } from "react";
+import { login as apiLogin } from "../api";
 
 const STORAGE_KEY = "beyondmaps_user";
 const PENDING_KEY = "beyondmaps_pending_signup";
