@@ -283,13 +283,35 @@ const AuthContext = createContext(null);
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(() => getSavedUser());
 
-  async function signIn(email, password) {
-    const loggedInUser = await mockSignIn(email, password);
-
-    setUser(loggedInUser);
-
-    return loggedInUser;
+  async function signIn(data) {
+  if (!data?.email || !data?.password) {
+    throw new Error("Please enter your email and password.");
   }
+
+  const result = await apiLogin(data.email, data.password);
+
+  const user = {
+    id: result.user_id,
+    name: result.name,
+    email: result.email,
+    loggedIn: true,
+
+    preferences: {
+      ...defaultPreferences,
+    },
+  };
+
+  // Save the JWT token for future API requests
+  localStorage.setItem("beyondmaps_token", result.access_token);
+
+  // Save the logged-in user
+  saveUser(user);
+
+  // Update React authentication state
+  setUser(user);
+
+  return user;
+}
 
   async function signUp(data) {
     return await mockSignUp(data);
