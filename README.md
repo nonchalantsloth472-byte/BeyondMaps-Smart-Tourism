@@ -7,7 +7,7 @@ BeyondMaps is a smart tourism platform designed to help travelers discover perso
 ## 👥 Team
 
 * Gun Agrawal
-* Ridima Singh
+* Ridhima Singh
 * Nitya Bhardwaj
 * Arpita Bansal
 * Divija Girdhar
