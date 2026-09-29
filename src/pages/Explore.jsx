@@ -616,12 +616,12 @@ export default function Explore() {
             <IntelligenceMetric
               index={2}
               title="Alternatives"
-              description="Discover quieter routes"
+              description="Discover quieter stays & experiences"
             />
             <IntelligenceMetric
               index={3}
-              title="Safety"
-              description="Travel with context"
+              title="Hospitality"
+              description="Connect with local options"
             />
           </div>
 
