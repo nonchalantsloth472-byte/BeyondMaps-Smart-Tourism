@@ -458,9 +458,9 @@ export default function Explore() {
             </h1>
 
             <p className="text-sm lg:text-base text-[#6F6A61] leading-relaxed max-w-md">
-              Explore destinations through crowd patterns, local experiences
-              and smarter alternatives — search, filter, or scan the map to
-              start.
+              Explore destinations through crowd patterns, local experiences,
+              hospitality options and smarter alternatives - search, filter,
+              or scan the map to start.
             </p>
 
           </div>
