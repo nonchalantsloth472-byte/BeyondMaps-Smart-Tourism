@@ -1105,7 +1105,9 @@ export default function Explore() {
                     <p className="text-[9px] uppercase tracking-[0.16em] text-[#6F6A61] mb-3">
                       Why BeyondMaps?
                     </p>
-
+<p className="text-xs text-[#6F6A61] mb-4 leading-relaxed">
+  Discover nearby stays, local dining and experiences alongside your destination.
+</p>
                     <ul className="space-y-2">
                       {recommendationReasons(selectedDestination).map((reason, i) => (
                         <li
